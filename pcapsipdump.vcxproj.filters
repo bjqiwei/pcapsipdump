@@ -14,4 +14,38 @@
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="calltable.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pcapsipdump.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pcapsipdump_lib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pcapsipdump_strlib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="trigger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="calltable.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pcapsipdump.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pcapsipdump_lib.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pcapsipdump_strlib.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="trigger.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
