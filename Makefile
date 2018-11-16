@@ -1,5 +1,5 @@
 LIBS ?= -lpcap -lstdc++
-RELEASEFLAGS ?= -O1 -Wall
+RELEASEFLAGS ?= -g -O0 -Wall
 #CXXFLAGS ?= --std=c++0x
 
 # auto-detect if bsd/strings.h is available

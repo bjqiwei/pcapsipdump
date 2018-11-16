@@ -508,7 +508,7 @@ int main(int argc, char *argv[])
                 }else{
                     data=(char *)((unsigned char *)tcph + (tcph->doff * 4));
                 }
-                datalen=pkt_header->len-((unsigned long)data-(unsigned long)pkt_data);
+                datalen=pkt_header->caplen-((unsigned long)data-(unsigned long)pkt_data);
 
                 if (opt_rtpsave == RTPSAVE_RTP || opt_rtpsave == RTPSAVE_RTPEVENT){
                     save_this_rtp_packet=1;
