@@ -72,46 +72,46 @@ struct ce_irtp_ssrc {
 
 class calltable
 {
-    public:
+public:
 	calltable();
 	int add(
-	    const char *call_id,
-	    unsigned long call_id_len,
-            const char *caller,
-            const char *callee,
-	    time_t time);
+		const char *call_id,
+		unsigned long call_id_len,
+		const char *caller,
+		const char *callee,
+		time_t time);
 	int find_by_call_id(
-	    const char *call_id,
-	    unsigned long call_id_len);
+		const char *call_id,
+		unsigned long call_id_len);
 	int add_ip_port(
-	    calltable_element *ce,
-	    in_addr_t addr,
-	    unsigned short port);
+		calltable_element *ce,
+		in_addr_t addr,
+		unsigned short port);
 	int find_ip_port(
-	    in_addr_t addr,
-	    unsigned short port);
-        int find_ip_port_ssrc(
-            in_addr_t addr,
-            unsigned short port,
-            uint32_t ssrc,
-            calltable_element **ce,
-            int *idx_rtp);
-        void add_ipfrag(
-            struct addr_addr_id aai,
-            pcap_dumper_t *f);
-        void delete_ipfrag(
-            struct addr_addr_id aai);
-        pcap_dumper_t *get_ipfrag(
-            struct addr_addr_id aai);
-	int do_cleanup( time_t currtime );
+		in_addr_t addr,
+		unsigned short port);
+	int find_ip_port_ssrc(
+		in_addr_t addr,
+		unsigned short port,
+		uint32_t ssrc,
+		calltable_element **ce,
+		int *idx_rtp);
+	void add_ipfrag(
+		struct addr_addr_id aai,
+		pcap_dumper_t *f);
+	void delete_ipfrag(
+		struct addr_addr_id aai);
+	pcap_dumper_t *get_ipfrag(
+		struct addr_addr_id aai);
+	int do_cleanup(time_t currtime);
 	std::vector <calltable_element> table;
-        std::map <addr_addr_id, pcap_dumper_t *> ipfrags;
+	std::map <addr_addr_id, pcap_dumper_t *> ipfrags;
 	bool erase_non_t38;
-        int opt_absolute_timeout;
-    private:
+	int opt_absolute_timeout;
+private:
 	time_t global_last_packet_time;
 #ifdef USE_CALLTABLE_CACHE
-        std::map <addr_port, ce_irtp_ssrc> cache;
-        std::map <std::string, int> call_id_cache;
+	std::map <addr_port, ce_irtp_ssrc> cache;
+	std::map <std::string, int> call_id_cache;
 #endif
 };
