@@ -20,37 +20,42 @@
     Project's home: http://pcapsipdump.sf.net/
 */
 
-#ifndef INT32_MAX
-#define INT32_MAX                (2147483647)
-#endif
 
 #include <vector>
+#include <set>
 #include <string>
 #include <map>
+#include <memory>
+#include <time.h>
 
 #include <pcap.h>
 #include <arpa/inet.h>
 
-#define calltable_max_ip_per_call 4
+#ifndef INT32_MAX
+#define INT32_MAX                (2147483647)
+#endif
+
+struct addr_port {
+	in_addr_t addr;
+	uint16_t  port;
+};
 
 struct calltable_element {
-	unsigned char is_used;
 	unsigned char had_bye;
 	unsigned char had_t38;
-        unsigned char rtpmap_event;
-	char caller[16];
-	char callee[16];
-	char call_id[32];
-	unsigned long call_id_len ;
-	in_addr_t ip[calltable_max_ip_per_call];
-        uint16_t port[calltable_max_ip_per_call];
-        uint32_t ssrc[calltable_max_ip_per_call];
-	int ip_n;
+	unsigned char rtpmap_event;
+	std::string caller;
+	std::string callee;
+	std::string call_id;
+	std::set<struct addr_port> ip_port;
+	std::vector<uint32_t>  ssrc;
 	time_t first_packet_time;
 	time_t last_packet_time;
 	pcap_dumper_t *f_pcap;
-	char fn_pcap[128];
+	std::string fn_pcap;
 };
+
+typedef std::shared_ptr<calltable_element> calltable_element_ptr;
 
 struct addr_addr_id {
     in_addr_t saddr;
@@ -58,44 +63,24 @@ struct addr_addr_id {
     uint16_t  id;
 };
 
-#ifdef USE_CALLTABLE_CACHE
-struct addr_port {
-    in_addr_t addr;
-    uint16_t  port;
-};
-struct ce_irtp_ssrc {
-    calltable_element *ce;
-    int irtp;
-    uint32_t ssrc;
-};
-#endif
-
 class calltable
 {
 public:
 	calltable();
-	int add(
-		const char *call_id,
-		unsigned long call_id_len,
-		const char *caller,
-		const char *callee,
+	calltable_element_ptr add(
+		const std::string & call_id,
+		const std::string & caller,
+		const std::string & callee,
 		time_t time);
-	int find_by_call_id(
-		const char *call_id,
-		unsigned long call_id_len);
-	int add_ip_port(
-		calltable_element *ce,
+	calltable_element_ptr find_by_call_id(
+		const std::string & call_id);
+	bool add_ip_port(
+		calltable_element_ptr ce,
 		in_addr_t addr,
 		unsigned short port);
-	int find_ip_port(
+	calltable_element_ptr find_ip_port(
 		in_addr_t addr,
 		unsigned short port);
-	int find_ip_port_ssrc(
-		in_addr_t addr,
-		unsigned short port,
-		uint32_t ssrc,
-		calltable_element **ce,
-		int *idx_rtp);
 	void add_ipfrag(
 		struct addr_addr_id aai,
 		pcap_dumper_t *f);
@@ -104,14 +89,10 @@ public:
 	pcap_dumper_t *get_ipfrag(
 		struct addr_addr_id aai);
 	int do_cleanup(time_t currtime);
-	std::vector <calltable_element> table;
-	std::map <addr_addr_id, pcap_dumper_t *> ipfrags;
 	bool erase_non_t38;
 	int opt_absolute_timeout;
 private:
-	time_t global_last_packet_time;
-#ifdef USE_CALLTABLE_CACHE
-	std::map <addr_port, ce_irtp_ssrc> cache;
-	std::map <std::string, int> call_id_cache;
-#endif
+	std::map <addr_addr_id, pcap_dumper_t *> ipfrags;
+	std::map <std::string, calltable_element_ptr> callid_table;
+	std::map <struct addr_port,std::string> addr_port_table;
 };

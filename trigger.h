@@ -14,10 +14,10 @@ public:
 	static void init(void);
 	static void add(const string s);
 	static void trigger(const vector <vector <string> > *t,
-		const char *fn,
-		const char *from,
-		const char *to,
-		const char *callid,
+		const std::string & fn,
+		const std::string & from,
+		const std::string & to,
+		const std::string & callid,
 		const time_t time);
 };
 

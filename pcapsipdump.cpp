@@ -129,7 +129,7 @@ fail:
 	return false;
 }
 
-int parse_sdp(const char *sdp, size_t sdplen, calltable_element *ce)
+int parse_sdp(const char *sdp, size_t sdplen, calltable_element_ptr ce)
 {
     in_addr_t addr;
     unsigned short port;
@@ -442,239 +442,236 @@ int main(int argc, char *argv[])
 	}
 
 	/* Retrieve the packets */
-	while ((res = pcap_next_ex(handle, &pkt_header, &pkt_data)) >= 0) {
-		{
-			struct iphdr *header_ip;
-			struct ipv6hdr *header_ipv6;
-			char *data;
-			const char *s;
-			unsigned long datalen;
-			unsigned long l;
-			int idx = -1;
-			char sip_method[10] = "";
+	while ((res = pcap_next_ex(handle, &pkt_header, &pkt_data)) >= 0)
+	{
+		struct iphdr *header_ip;
+		struct ipv6hdr *header_ipv6;
+		char *data;
+		const char *s;
+		unsigned long datalen;
+		unsigned long l;
+		char sip_method[10] = "";
 
-			if (res == 0)
-				/* Timeout elapsed */
-				continue;
+		if (res == 0)
+			/* Timeout elapsed */
+			continue;
 
-			if (pkt_header->ts.tv_sec - last_cleanup > 15) {
-				ct->do_cleanup(pkt_header->ts.tv_sec);
-				last_cleanup = pkt_header->ts.tv_sec;
-			}
-			header_ip = (iphdr *)((char*)pkt_data + offset_to_ip);
-			// 802.1Q VLAN
-			if ((offset_to_ip == 14) &&
-				ntohs(*((uint16_t*)((char*)pkt_data + offset_to_ip - 2))) == 0x8100 &&
-				ntohs(*((uint16_t*)((char*)pkt_data + offset_to_ip + 2))) == 0x0800) {
-				header_ip = (iphdr *)((char*)pkt_data + offset_to_ip + 4);
-			}
-			header_ipv6 = (ipv6hdr *)header_ip;
-			if (header_ip->version == 4 && (header_ip->frag_off & htons(0x1fff)) > 0) { // fragment offset > 0
-				struct addr_addr_id aai = (struct addr_addr_id) {
-					header_ip->saddr,
-						header_ip->daddr,
-						header_ip->id
-				};
-				pcap_dumper_t *f = ct->get_ipfrag(aai);
-				if (f) {
-					pcap_dump((u_char *)f, pkt_header, pkt_data);
-					if (opt_packetbuffered) { pcap_dump_flush(f); }
-					if ((header_ip->frag_off & htons(0x2000)) == 0) { // more_fragments == 0
-						ct->delete_ipfrag(aai);
-					}
-				}
-			}
-			else if ( /* sane IPv4 UDP */
-				(header_ip->version == 4 && pkt_header->caplen >=
-				(offset_to_ip + sizeof(struct iphdr) + sizeof(struct udphdr)) &&
-					header_ip->protocol == IPPROTO_UDP)
-				/* sane IPv6 UDP */ ||
-				(header_ipv6->version == 6 && pkt_header->caplen >=
-				(offset_to_ip + sizeof(struct ipv6hdr) + sizeof(struct udphdr)) &&
-					header_ipv6->nexthdr == IPPROTO_UDP)
-#ifdef USE_TCP
-				/* sane IPv4 TCP */ ||
-				(header_ip->version == 4 && pkt_header->caplen >=
-				(offset_to_ip + sizeof(struct iphdr) + sizeof(struct tcphdr)) &&
-					header_ip->protocol == IPPROTO_TCP)
-				/* sane IPv6 TCP */ ||
-				(header_ipv6->version == 6 && pkt_header->caplen >=
-				(offset_to_ip + sizeof(struct ipv6hdr) + sizeof(struct tcphdr)) &&
-					header_ip->protocol == IPPROTO_TCP)
-#endif
-				) {
-				calltable_element *ce = NULL;
-				int idx_rtp = 0;
-				int save_this_rtp_packet = 0;
-				int is_rtcp = 0;
-				uint16_t rtp_port_mask = 0xffff;
-				struct udphdr *header_udp;
-				struct tcphdr *tcph;
-
-				tcph = (tcphdr *)((char*)header_ip +
-					((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
-				header_udp = (udphdr *)((char*)header_ip +
-					((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
-				if ((header_ip->version == 4 && header_ip->protocol == IPPROTO_UDP) ||
-					(header_ip->version == 6 && header_ipv6->nexthdr == IPPROTO_UDP)) {
-					data = (char *)header_udp + sizeof(*header_udp);
-				}
-				else {
-					data = (char *)((unsigned char *)tcph + (tcph->doff * 4));
-				}
-				datalen = pkt_header->caplen - ((unsigned long)data - (unsigned long)pkt_data);
-
-				if (opt_rtpsave == RTPSAVE_RTP || opt_rtpsave == RTPSAVE_RTPEVENT) {
-					save_this_rtp_packet = 1;
-				}
-				else if (opt_rtpsave == RTPSAVE_RTP_RTCP) {
-					save_this_rtp_packet = 1;
-					rtp_port_mask = 0xfffe;
-					is_rtcp = (htons(header_udp->source) & 1) && (htons(header_udp->dest) & 1);
-				}
-				else {
-					save_this_rtp_packet = 0;
-				}
-
-				if (save_this_rtp_packet &&
-					ct->find_ip_port_ssrc(
-						hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask,
-						get_ssrc(data, is_rtcp),
-						&ce, &idx_rtp)) {
-					if (ce->f_pcap != NULL &&
-						(opt_rtpsave != RTPSAVE_RTPEVENT ||
-							data[1] == ce->rtpmap_event)) {
-						ce->last_packet_time = pkt_header->ts.tv_sec;
-						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
-						if (opt_packetbuffered) {
-							pcap_dump_flush(ce->f_pcap);
-						}
-					}
-				}
-				else if (save_this_rtp_packet &&
-					ct->find_ip_port_ssrc(
-						hsaddr(header_ip), htons(header_udp->source) & rtp_port_mask,
-						get_ssrc(data, is_rtcp),
-						&ce, &idx_rtp)) {
-					if (ce->f_pcap != NULL &&
-						(opt_rtpsave != RTPSAVE_RTPEVENT || data[1] == ce->rtpmap_event)) {
-						ce->last_packet_time = pkt_header->ts.tv_sec;
-						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
-						if (opt_packetbuffered) {
-							pcap_dump_flush(ce->f_pcap);
-						}
-					}
-				}
-				else if (get_method(data, sip_method, sizeof(sip_method)) ||
-					memcmp(data, "SIP/2.0 ", sizeof("SIP/2.0 "))) {
-					char caller[256] = "";
-					char called[256] = "";
-					char callid[512] = "";
-
-					data[datalen] = 0;
-					if (get_sip_peername(data, datalen, "From:", caller, sizeof(caller))) {
-						get_sip_peername(data, datalen, "f:", caller, sizeof(caller));
-					}
-					if (get_sip_peername(data, datalen, "To:", called, sizeof(called))) {
-						get_sip_peername(data, datalen, "t:", called, sizeof(called));
-					}
-					s = gettag(data, datalen, "Call-ID:", &l) ? :
-						gettag(data, datalen, "i:", &l);
-					memcpy(callid, s, l);
-					callid[l] = '\0';
-					number_filter_matched = false;
-					if (!number_filter_in_use ||
-						(regexec(&number_filter, caller, 1, pmatch, 0) == 0) ||
-						(regexec(&number_filter, called, 1, pmatch, 0) == 0)) {
-						number_filter_matched = true;
-					}
-					if (s != NULL && ((idx = ct->find_by_call_id(s, l)) < 0) && number_filter_matched) {
-						if ((idx = ct->add(s, l, // callid
-							caller,
-							called,
-							pkt_header->ts.tv_sec)) < 0) {
-							printf("Too many simultaneous calls. Ran out of call table space!\n");
-						}
-						else {
-							if (regexec(&method_filter, sip_method, 1, pmatch, 0) == 0) {
-								if ((--call_skip_cnt) > 0) {
-									if (verbosity >= 3) {
-										printf("Skipping %s call from %s to %s \n", sip_method, caller, called);
-									}
-									ct->table[idx].f_pcap = NULL;
-								}
-								else {
-									char fn[1024], dn[1024];
-									call_skip_cnt = opt_call_skip_n;
-									expand_dir_template(fn, sizeof(fn), opt_fntemplate,
-										caller, called, callid,
-										pkt_header->ts.tv_sec);
-									if (strchr(fn, '/')) {
-										strcpy(dn, fn);
-										mkdir_p(dirname(dn), 0777);
-									}
-									ct->table[idx].f_pcap = pcap_dump_open(handle, fn);
-									strlcpy(ct->table[idx].fn_pcap, fn, sizeof(ct->table[idx].fn_pcap));
-								}
-							}
-							else {
-								if (verbosity >= 2) {
-									printf("Unknown SIP method:'%s'!\n", sip_method);
-								}
-								ct->table[idx].f_pcap = NULL;
-							}
-						}
-					}
-
-					if (idx >= 0) {
-						char *sdp = NULL;
-						if (strcmp(sip_method, "BYE") == 0) {
-							ct->table[idx].had_bye = 1;
-						}
-						s = gettag(data, datalen, "Content-Type:", &l) ? :
-							gettag(data, datalen, "c:", &l);
-						if (l > 0 && s && strncasecmp(s, "application/sdp", l) == 0 &&
-							(sdp = strstr(data, "\r\n\r\n")) != NULL) {
-							parse_sdp(sdp, datalen - (sdp - data), &ct->table[idx]);
-						}
-						else if (l > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(l, 25)) == 0 &&
-							(sdp = strstr(data, "\r\n\r\n")) != NULL) {
-							// FIXME: do proper mime miltipart parsing
-							parse_sdp(sdp, datalen - (sdp - data), &ct->table[idx]);
-						}
-						if (ct->table[idx].f_pcap != NULL) {
-							pcap_dump((u_char *)ct->table[idx].f_pcap, pkt_header, pkt_data);
-							if (opt_packetbuffered) { pcap_dump_flush(ct->table[idx].f_pcap); }
-						}
-						if (header_ip->version == 4 && header_ip->frag_off == htons(0x2000)) { //flags == more fragments and offset == 0
-							ct->add_ipfrag((struct addr_addr_id) {
-								header_ip->saddr,
-									header_ip->daddr,
-									header_ip->id
-							}, ct->table[idx].f_pcap);
-						}
-					}
-				}
-				else {
-					if (verbosity >= 3) {
-						char st1[INET6_ADDRSTRLEN];
-						char st2[INET6_ADDRSTRLEN];
-
-						if (header_ip->version == 4) {
-							inet_ntop(AF_INET, &(header_ip->saddr), st1, sizeof(st1));
-							inet_ntop(AF_INET, &(header_ip->daddr), st2, sizeof(st2));
-						}
-						else {
-							inet_ntop(AF_INET6, &(header_ipv6->saddr), st1, sizeof(st1));
-							inet_ntop(AF_INET6, &(header_ipv6->daddr), st2, sizeof(st2));
-						}
-						printf("Skipping udp packet %s:%d->%s:%d\n",
-							st1, htons(header_udp->source),
-							st2, htons(header_udp->dest));
-					}
+		if (pkt_header->ts.tv_sec - last_cleanup > 15) {
+			ct->do_cleanup(pkt_header->ts.tv_sec);
+			last_cleanup = pkt_header->ts.tv_sec;
+		}
+		header_ip = (iphdr *)((char*)pkt_data + offset_to_ip);
+		// 802.1Q VLAN
+		if ((offset_to_ip == 14) &&
+			ntohs(*((uint16_t*)((char*)pkt_data + offset_to_ip - 2))) == 0x8100 &&
+			ntohs(*((uint16_t*)((char*)pkt_data + offset_to_ip + 2))) == 0x0800) {
+			header_ip = (iphdr *)((char*)pkt_data + offset_to_ip + 4);
+		}
+		header_ipv6 = (ipv6hdr *)header_ip;
+		if (header_ip->version == 4 && (header_ip->frag_off & htons(0x1fff)) > 0) { // fragment offset > 0
+			struct addr_addr_id aai = (struct addr_addr_id) {
+				header_ip->saddr,
+					header_ip->daddr,
+					header_ip->id
+			};
+			pcap_dumper_t *f = ct->get_ipfrag(aai);
+			if (f) {
+				pcap_dump((u_char *)f, pkt_header, pkt_data);
+				if (opt_packetbuffered) { pcap_dump_flush(f); }
+				if ((header_ip->frag_off & htons(0x2000)) == 0) { // more_fragments == 0
+					ct->delete_ipfrag(aai);
 				}
 			}
 		}
+		else if ( /* sane IPv4 UDP */
+			(header_ip->version == 4 && pkt_header->caplen >=
+			(offset_to_ip + sizeof(struct iphdr) + sizeof(struct udphdr)) &&
+				header_ip->protocol == IPPROTO_UDP)
+			/* sane IPv6 UDP */ ||
+			(header_ipv6->version == 6 && pkt_header->caplen >=
+			(offset_to_ip + sizeof(struct ipv6hdr) + sizeof(struct udphdr)) &&
+				header_ipv6->nexthdr == IPPROTO_UDP)
+#ifdef USE_TCP
+			/* sane IPv4 TCP */ ||
+			(header_ip->version == 4 && pkt_header->caplen >=
+			(offset_to_ip + sizeof(struct iphdr) + sizeof(struct tcphdr)) &&
+				header_ip->protocol == IPPROTO_TCP)
+			/* sane IPv6 TCP */ ||
+			(header_ipv6->version == 6 && pkt_header->caplen >=
+			(offset_to_ip + sizeof(struct ipv6hdr) + sizeof(struct tcphdr)) &&
+				header_ip->protocol == IPPROTO_TCP)
+#endif
+			) {
+			calltable_element_ptr ce = nullptr;
+			int save_this_rtp_packet = 0;
+			int is_rtcp = 0;
+			uint16_t rtp_port_mask = 0xffff;
+			struct udphdr *header_udp;
+			struct tcphdr *tcph;
+
+			tcph = (tcphdr *)((char*)header_ip +
+				((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
+			header_udp = (udphdr *)((char*)header_ip +
+				((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
+			if ((header_ip->version == 4 && header_ip->protocol == IPPROTO_UDP) ||
+				(header_ip->version == 6 && header_ipv6->nexthdr == IPPROTO_UDP)) {
+				data = (char *)header_udp + sizeof(*header_udp);
+			}
+			else {
+				data = (char *)((unsigned char *)tcph + (tcph->doff * 4));
+			}
+			datalen = pkt_header->caplen - ((unsigned long)data - (unsigned long)pkt_data);
+
+			if (opt_rtpsave == RTPSAVE_RTP || opt_rtpsave == RTPSAVE_RTPEVENT) {
+				save_this_rtp_packet = 1;
+			}
+			else if (opt_rtpsave == RTPSAVE_RTP_RTCP) {
+				save_this_rtp_packet = 1;
+				rtp_port_mask = 0xfffe;
+				is_rtcp = (htons(header_udp->source) & 1) && (htons(header_udp->dest) & 1);
+			}
+			else {
+				save_this_rtp_packet = 0;
+			}
+
+			ce = ct->find_ip_port(hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask);
+
+			if (save_this_rtp_packet && ce != nullptr)
+			{
+				if (ce->f_pcap != NULL &&
+					(opt_rtpsave != RTPSAVE_RTPEVENT ||
+						data[1] == ce->rtpmap_event)) {
+					ce->last_packet_time = pkt_header->ts.tv_sec;
+					pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+					if (opt_packetbuffered) {
+						pcap_dump_flush(ce->f_pcap);
+					}
+				}
+				continue;
+			}
+
+			ce = ct->find_ip_port(hsaddr(header_ip), htons(header_udp->source) & rtp_port_mask);
+			if (save_this_rtp_packet && ce != nullptr)
+			{
+				if (ce->f_pcap != NULL &&
+					(opt_rtpsave != RTPSAVE_RTPEVENT || data[1] == ce->rtpmap_event)) {
+					ce->last_packet_time = pkt_header->ts.tv_sec;
+					pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+					if (opt_packetbuffered) {
+						pcap_dump_flush(ce->f_pcap);
+					}
+				}
+				continue;
+			}
+
+			else if (get_method(data, sip_method, sizeof(sip_method))
+				|| memcmp(data, "SIP/2.0 ", sizeof("SIP/2.0 ")))
+			{
+				char caller[256] = "";
+				char called[256] = "";
+				char callid[512] = "";
+
+				if (get_sip_peername(data, datalen, "From:", caller, sizeof(caller))) {
+					get_sip_peername(data, datalen, "f:", caller, sizeof(caller));
+				}
+				if (get_sip_peername(data, datalen, "To:", called, sizeof(called))) {
+					get_sip_peername(data, datalen, "t:", called, sizeof(called));
+				}
+				const char * tmp = gettag(data, datalen, "Call-ID:", &l) ? : gettag(data, datalen, "i:", &l);
+				memcpy(callid, tmp, MIN(l, sizeof(callid)));
+				callid[MIN(l, sizeof(callid))] = '\0';
+				number_filter_matched = false;
+				if (!number_filter_in_use ||
+					(regexec(&number_filter, caller, 1, pmatch, 0) == 0) ||
+					(regexec(&number_filter, called, 1, pmatch, 0) == 0)) {
+					number_filter_matched = true;
+				}
+				if (callid[0] != '\0' && (ce = ct->find_by_call_id(callid)) == nullptr && number_filter_matched)
+				{
+					ce = ct->add(callid, caller, called, pkt_header->ts.tv_sec);
+					if (ce == nullptr) {
+						printf("Too many simultaneous calls. Ran out of call table space!\n");
+					}
+					else {
+						if (regexec(&method_filter, sip_method, 1, pmatch, 0) == 0) {
+							if ((--call_skip_cnt) > 0) {
+								if (verbosity >= 3) {
+									printf("Skipping %s call from %s to %s \n", sip_method, caller, called);
+								}
+								ce->f_pcap = NULL;
+							}
+							else {
+								char fn[1024], dn[1024];
+								call_skip_cnt = opt_call_skip_n;
+								expand_dir_template(fn, sizeof(fn), opt_fntemplate,
+									caller, called, callid,
+									pkt_header->ts.tv_sec);
+								if (strchr(fn, '/')) {
+									strcpy(dn, fn);
+									mkdir_p(dirname(dn), 0777);
+								}
+								ce->f_pcap = pcap_dump_open(handle, fn);
+								ce->fn_pcap = fn;
+							}
+						}
+						else {
+							if (verbosity >= 2) {
+								printf("Unknown SIP method:'%s'!\n", sip_method);
+							}
+							ce->f_pcap = NULL;
+						}
+					}
+				}
+
+				if (ce != nullptr) {
+					char *sdp = NULL;
+					if (strcmp(sip_method, "BYE") == 0) {
+						ce->had_bye = 1;
+					}
+					s = gettag(data, datalen, "Content-Type:", &l) ? :
+						gettag(data, datalen, "c:", &l);
+					if (l > 0 && s && strncasecmp(s, "application/sdp", l) == 0 &&
+						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
+						parse_sdp(sdp, datalen - (sdp - data), ce);
+					}
+					else if (l > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(l, 25)) == 0 &&
+						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
+						// FIXME: do proper mime miltipart parsing
+						parse_sdp(sdp, datalen - (sdp - data), ce);
+					}
+					if (ce->f_pcap != NULL) {
+						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+						if (opt_packetbuffered) { pcap_dump_flush(ce->f_pcap); }
+					}
+					if (header_ip->version == 4 && header_ip->frag_off == htons(0x2000)) { //flags == more fragments and offset == 0
+						ct->add_ipfrag((struct addr_addr_id) {
+							header_ip->saddr,
+								header_ip->daddr,
+								header_ip->id
+						}, ce->f_pcap);
+					}
+				}
+			}
+			else {
+				if (verbosity >= 3) {
+					char st1[INET6_ADDRSTRLEN];
+					char st2[INET6_ADDRSTRLEN];
+
+					if (header_ip->version == 4) {
+						inet_ntop(AF_INET, &(header_ip->saddr), st1, sizeof(st1));
+						inet_ntop(AF_INET, &(header_ip->daddr), st2, sizeof(st2));
+					}
+					else {
+						inet_ntop(AF_INET6, &(header_ipv6->saddr), st1, sizeof(st1));
+						inet_ntop(AF_INET6, &(header_ipv6->daddr), st2, sizeof(st2));
+					}
+					printf("Skipping udp packet %s:%d->%s:%d\n",
+						st1, htons(header_udp->source),
+						st2, htons(header_udp->dest));
+				}
+			}
+		}
+
 	}
 	// flush / close files
 	ct->do_cleanup(INT32_MAX);

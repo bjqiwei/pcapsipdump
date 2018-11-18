@@ -1,9 +1,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <map>
 #include <iostream>
-#include <cstdlib>
 #include <cstring>
 #include <unistd.h>
 #include "pcapsipdump_lib.h"
@@ -76,41 +74,44 @@ void Trigger::add(const string s) {
 }
 
 void Trigger::trigger(const vector <vector <string> > *t_const,
-	const char *fn,
-	const char *from,
-	const char *to,
-	const char *callid,
+	const std::string & fn,
+	const std::string & from,
+	const std::string & to,
+	const std::string & callid,
 	const time_t time) {
 	vector <vector <string> > t = *t_const;
 	for (vector <vector <string> >::iterator i = t.begin(); i != t.end(); i++) {
 		pid_t pid = fork();
 		if (pid == 0) {
 			// child process
-			vector <char*> argv;
+			vector <const char*> argv;
+			vector<std::string> argvstr;
 			for (vector <string>::iterator j = i->begin(); j != i->end(); j++) {
-				char *s = (char *)"";
+				const char *s = "";
 				const char *js = j->c_str();
 				if (*j == "%.") {
-					s = (char *)fn;
+					s = fn.c_str();
 				}
 				else if (strchr(js, '%')) {
-					s = (char *)malloc(1024);
-					expand_dir_template(s, 1024, js, from, to, callid, time);
+					char tmp[1024];
+					expand_dir_template(tmp, 1024, js, from.c_str(), to.c_str(), callid.c_str(), time);
+					argvstr.push_back(tmp);
+					s = argvstr[argvstr.size() - 1].c_str();
 				}
 				else {
-					s = (char *)js;
+					s = js;
 				}
 				argv.push_back(s);
 			}
 			if (Trigger::verbosity >= 2) {
 				cout << "Executing trigger:";
-				for (vector <char*>::iterator j = argv.begin(); j != argv.end(); j++) {
+				for (vector <const char*>::iterator j = argv.begin(); j != argv.end(); j++) {
 					cout << ' ' << *j;
 				}
 				cout << endl;
 			}
 			argv.push_back(NULL);
-			execv(argv[0], &argv[0]);
+			execv(argv[0], (char* const*)&argv[0]);
 			cout << "Warning: Can't execv()" << endl;
 		}
 		else if (pid < 0) {

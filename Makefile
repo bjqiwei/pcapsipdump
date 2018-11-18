@@ -22,15 +22,15 @@ all: make-checks/all pcapsipdump
 include make-checks/*.mk
 
 pcapsipdump: make-checks *.cpp *.h
-	$(CXX) $(RELEASEFLAGS) $(CXXFLAGS) $(LDFLAGS) $(DEFS) $(BSDSTR_DEFS) \
+	$(CXX) $(RELEASEFLAGS) $(CXXFLAGS) --std=c++11 $(LDFLAGS) $(DEFS) \
 	*.cpp \
-	$(LIBS) $(BSDSTR_LIBS) \
+	$(LIBS) \
 	-o pcapsipdump
 
 pcapsipdump-debug: make-checks *.cpp *.h
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(DEFS) $(BSDSTR_DEFS) -ggdb \
+	$(CXX) $(CXXFLAGS) --std=c++1 $(LDFLAGS) $(DEFS) -ggdb \
 	*.cpp \
-	$(LIBS) $(BSDSTR_LIBS) -pg \
+	$(LIBS) -pg \
 	-o pcapsipdump-debug
 
 clean: make-checks/clean
