@@ -641,7 +641,10 @@ int main(int argc, char *argv[])
 					}
 					if (ce->f_pcap != NULL) {
 						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
-						if (opt_packetbuffered) { pcap_dump_flush(ce->f_pcap); }
+						if (opt_packetbuffered) {
+							pcap_dump_flush(ce->f_pcap);
+							ce->last_packet_time = pkt_header->ts.tv_sec;
+						}
 					}
 					if (header_ip->version == 4 && header_ip->frag_off == htons(0x2000)) { //flags == more fragments and offset == 0
 						ct->add_ipfrag((struct addr_addr_id) {
