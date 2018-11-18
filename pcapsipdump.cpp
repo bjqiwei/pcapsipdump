@@ -477,7 +477,9 @@ int main(int argc, char *argv[])
 			pcap_dumper_t *f = ct->get_ipfrag(aai);
 			if (f) {
 				pcap_dump((u_char *)f, pkt_header, pkt_data);
-				if (opt_packetbuffered) { pcap_dump_flush(f); }
+				if (opt_packetbuffered) {
+					pcap_dump_flush(f);
+				}
 				if ((header_ip->frag_off & htons(0x2000)) == 0) { // more_fragments == 0
 					ct->delete_ipfrag(aai);
 				}
@@ -641,9 +643,9 @@ int main(int argc, char *argv[])
 					}
 					if (ce->f_pcap != NULL) {
 						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+						ce->last_packet_time = pkt_header->ts.tv_sec;
 						if (opt_packetbuffered) {
 							pcap_dump_flush(ce->f_pcap);
-							ce->last_packet_time = pkt_header->ts.tv_sec;
 						}
 					}
 					if (header_ip->version == 4 && header_ip->frag_off == htons(0x2000)) { //flags == more fragments and offset == 0
