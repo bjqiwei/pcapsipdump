@@ -36,7 +36,7 @@
 #endif
 
 struct addr_port {
-	in_addr_t addr;
+	//in_addr_t addr;
 	uint16_t  port;
 };
 

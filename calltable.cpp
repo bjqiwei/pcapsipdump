@@ -38,7 +38,8 @@ bool operator <(addr_addr_id const& a, addr_addr_id const& b)
 
 bool operator <(addr_port const& a, addr_port const& b)
 {
-    return a.addr < b.addr || (a.addr == b.addr && a.port < b.port );
+    //return a.addr < b.addr || (a.addr == b.addr && a.port < b.port );
+	return a.port < b.port;
 }
 
 calltable::calltable()
@@ -90,7 +91,7 @@ bool calltable::add_ip_port(
 	    in_addr_t addr,
 	    unsigned short port)
 {
-	struct addr_port addr_port{ addr, port };
+	struct addr_port addr_port{/* addr, */port };
 	addr_port_table[addr_port] = ce->call_id;
 	ce->ip_port.insert(addr_port);
 	return true;
@@ -98,7 +99,7 @@ bool calltable::add_ip_port(
 
 calltable_element_ptr calltable::find_ip_port(in_addr_t addr, unsigned short port)
 {
-	struct addr_port addr_port { addr, port };
+	struct addr_port addr_port {/* addr, */port };
 	const auto ce = addr_port_table.find(addr_port);
 	if (ce != addr_port_table.end())
 	{
@@ -112,7 +113,7 @@ int calltable::do_cleanup(time_t currtime) {
 
 	for (const auto & ce : callid_table)
 	{
-		if ((currtime - ce.second->last_packet_time > 300) ||
+		if ((currtime - ce.second->last_packet_time > 150) ||
 			(ce.second->had_bye && currtime - ce.second->first_packet_time > opt_absolute_timeout))
 		{
 			if (ce.second->f_pcap != NULL) {
@@ -132,8 +133,7 @@ int calltable::do_cleanup(time_t currtime) {
 			for(const auto & addr_port : ce.second->ip_port)
 			{
 				const auto & it_callid = addr_port_table.find(addr_port);
-				if (it_callid != addr_port_table.end()){
-					it_callid->second == ce.second->call_id;
+				if (it_callid != addr_port_table.end() && it_callid->second == ce.second->call_id){
 					addr_port_table.erase(it_callid);
 				}
 			}
