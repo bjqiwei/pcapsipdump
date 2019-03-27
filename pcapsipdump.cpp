@@ -129,11 +129,11 @@ fail:
 	return false;
 }
 
-int parse_sdp(const char *sdp, size_t sdplen, calltable_element_ptr ce)
+int parse_sdp(in_addr_t addr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
 {
-    in_addr_t addr;
+    in_addr_t no_use_addr;
     unsigned short port;
-    if (! get_ip_port_from_sdp(sdp, sdplen, &addr, &port)){
+    if (! get_ip_port_from_sdp(sdp, sdplen, &no_use_addr, &port)){
         ct->add_ip_port(ce, addr, port);
     }else{
         if (verbosity >= 2) {
@@ -634,12 +634,12 @@ int main(int argc, char *argv[])
 						gettag(data, datalen, "c:", &l);
 					if (l > 0 && s && strncasecmp(s, "application/sdp", l) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
-						parse_sdp(sdp, datalen - (sdp - data), ce);
+						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 					}
 					else if (l > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(l, 25)) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
 						// FIXME: do proper mime miltipart parsing
-						parse_sdp(sdp, datalen - (sdp - data), ce);
+						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 					}
 					if (ce->f_pcap != NULL) {
 						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);

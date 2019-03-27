@@ -99,10 +99,10 @@ bool calltable::add_ip_port(
 calltable_element_ptr calltable::find_ip_port(in_addr_t addr, unsigned short port)
 {
 	struct addr_port addr_port { addr, port };
-	const auto addr_port = addr_port_table.find(addr_port);
-	if (addr_port != addr_port_table.end())
+	const auto it_addr_port = addr_port_table.find(addr_port);
+	if (it_addr_port != addr_port_table.end())
 	{
-		return find_by_call_id(addr_port->second);
+		return find_by_call_id(it_addr_port->second);
 	}
 	return nullptr;
 }
