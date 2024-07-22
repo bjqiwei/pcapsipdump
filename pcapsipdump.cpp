@@ -129,12 +129,12 @@ fail:
 	return false;
 }
 
-int parse_sdp(in_addr_t addr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
+int parse_sdp(in_addr_t saddr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
 {
     in_addr_t no_use_addr;
     unsigned short port;
     if (! get_ip_port_from_sdp(sdp, sdplen, &no_use_addr, &port)){
-        ct->add_ip_port(ce, addr, port);
+        ct->add_ip_port(ce, saddr, port);
     }else{
         if (verbosity >= 2) {
             printf("Can't get ip/port from SDP:\n%s\n\n", sdp);
@@ -449,7 +449,8 @@ int main(int argc, char *argv[])
 		char *data;
 		const char *s;
 		unsigned long datalen;
-		unsigned long l;
+		unsigned long taglen;
+		bool is_sip_method = false;
 		char sip_method[10] = "";
 
 		if (res == 0)
@@ -515,6 +516,7 @@ int main(int argc, char *argv[])
 				((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
 			header_udp = (udphdr *)((char*)header_ip +
 				((header_ip->version == 4) ? sizeof(iphdr) : sizeof(ipv6hdr)));
+
 			if ((header_ip->version == 4 && header_ip->protocol == IPPROTO_UDP) ||
 				(header_ip->version == 6 && header_ipv6->nexthdr == IPPROTO_UDP)) {
 				data = (char *)header_udp + sizeof(*header_udp);
@@ -536,38 +538,39 @@ int main(int argc, char *argv[])
 				save_this_rtp_packet = 0;
 			}
 
-			ce = ct->find_ip_port(hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask);
+			is_sip_method = get_method(data, sip_method, sizeof(sip_method));
+			if(!is_sip_method){
+				ce = ct->find_ip_port(hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask);
 
-			if (save_this_rtp_packet && ce != nullptr)
-			{
-				if (ce->f_pcap != NULL &&
-					(opt_rtpsave != RTPSAVE_RTPEVENT ||
-						data[1] == ce->rtpmap_event)) {
-					ce->last_packet_time = pkt_header->ts.tv_sec;
-					pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
-					if (opt_packetbuffered) {
-						pcap_dump_flush(ce->f_pcap);
+				if (save_this_rtp_packet && ce != nullptr)
+				{
+					if (ce->f_pcap != NULL &&
+						(opt_rtpsave != RTPSAVE_RTPEVENT ||
+							data[1] == ce->rtpmap_event)) {
+						ce->last_packet_time = pkt_header->ts.tv_sec;
+						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+						if (opt_packetbuffered) {
+							pcap_dump_flush(ce->f_pcap);
+						}
 					}
+					continue;
 				}
-				continue;
-			}
 
-			ce = ct->find_ip_port(hsaddr(header_ip), htons(header_udp->source) & rtp_port_mask);
-			if (save_this_rtp_packet && ce != nullptr)
-			{
-				if (ce->f_pcap != NULL &&
-					(opt_rtpsave != RTPSAVE_RTPEVENT || data[1] == ce->rtpmap_event)) {
-					ce->last_packet_time = pkt_header->ts.tv_sec;
-					pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
-					if (opt_packetbuffered) {
-						pcap_dump_flush(ce->f_pcap);
+				ce = ct->find_ip_port(hsaddr(header_ip), htons(header_udp->source) & rtp_port_mask);
+				if (save_this_rtp_packet && ce != nullptr)
+				{
+					if (ce->f_pcap != NULL &&
+						(opt_rtpsave != RTPSAVE_RTPEVENT || data[1] == ce->rtpmap_event)) {
+						ce->last_packet_time = pkt_header->ts.tv_sec;
+						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
+						if (opt_packetbuffered) {
+							pcap_dump_flush(ce->f_pcap);
+						}
 					}
+					continue;
 				}
-				continue;
 			}
-
-			else if (get_method(data, sip_method, sizeof(sip_method))
-				|| memcmp(data, "SIP/2.0 ", sizeof("SIP/2.0 ")))
+			if (is_sip_method || memcmp(data, "SIP/2.0 ", sizeof("SIP/2.0 ")))
 			{
 				char caller[256] = "";
 				char called[256] = "";
@@ -579,9 +582,9 @@ int main(int argc, char *argv[])
 				if (get_sip_peername(data, datalen, "To:", called, sizeof(called))) {
 					get_sip_peername(data, datalen, "t:", called, sizeof(called));
 				}
-				const char * tmp = gettag(data, datalen, "Call-ID:", &l) ? : gettag(data, datalen, "i:", &l);
-				memcpy(callid, tmp, MIN(l, sizeof(callid)));
-				callid[MIN(l, sizeof(callid))] = '\0';
+				const char * tmp = gettag(data, datalen, "Call-ID:", &taglen) ? : gettag(data, datalen, "i:", &taglen);
+				memcpy(callid, tmp, MIN(taglen, sizeof(callid)));
+				callid[MIN(taglen, sizeof(callid))] = '\0';
 				number_filter_matched = false;
 				if (!number_filter_in_use ||
 					(regexec(&number_filter, caller, 1, pmatch, 0) == 0) ||
@@ -630,13 +633,13 @@ int main(int argc, char *argv[])
 					if (strcmp(sip_method, "BYE") == 0) {
 						ce->had_bye = 1;
 					}
-					s = gettag(data, datalen, "Content-Type:", &l) ? :
-						gettag(data, datalen, "c:", &l);
-					if (l > 0 && s && strncasecmp(s, "application/sdp", l) == 0 &&
+					s = gettag(data, datalen, "Content-Type:", &taglen) ? :
+						gettag(data, datalen, "c:", &taglen);
+					if (taglen > 0 && s && strncasecmp(s, "application/sdp", taglen) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
 						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 					}
-					else if (l > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(l, 25)) == 0 &&
+					else if (taglen > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(taglen, 25)) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
 						// FIXME: do proper mime miltipart parsing
 						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
@@ -679,7 +682,7 @@ int main(int argc, char *argv[])
 
 	}
 	// flush / close files
-	ct->do_cleanup(INT32_MAX);
+	ct->do_cleanup(INT64_MAX);
 	// close libpcap session
 	pcap_close(handle);
 	// wait for forked processes;
