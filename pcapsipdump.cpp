@@ -636,11 +636,11 @@ int main(int argc, char *argv[])
 					s = gettag(data, datalen, "Content-Type:", &taglen) ? :
 						gettag(data, datalen, "c:", &taglen);
 					if (taglen > 0 && s && strncasecmp(s, "application/sdp", taglen) == 0 &&
-						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
+						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
 						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 					}
 					else if (taglen > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(taglen, 25)) == 0 &&
-						(sdp = strstr(data, "\r\n\r\n")) != NULL) {
+						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
 						// FIXME: do proper mime miltipart parsing
 						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 					}
