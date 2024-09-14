@@ -129,6 +129,32 @@ fail:
 	return false;
 }
 
+int  get_status(const char* ptr, unsigned long len) {
+	//"SIP/2.0 487 Request Terminated"
+	unsigned long l, tl;
+	const char* r, * lp;
+	const char* tag = "SIP/2.0 ";
+	tl = strlen(tag);
+	r = (const char*)memmem(ptr, len, tag, tl);
+	if (r == NULL) {
+		return 0;
+	}
+	else {
+		r += tl;
+		while (r[0] == ' ') {
+			r++;
+		}
+		lp = (const char*)memmem(r, len - (r - ptr), " ", 1);
+		if (lp == NULL) {
+			return 0;
+		}
+		else {
+			l = lp - r;
+		}
+	}
+	return atoi(r);
+}
+
 int parse_sdp(in_addr_t saddr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
 {
     in_addr_t no_use_addr;
@@ -456,6 +482,7 @@ int main(int argc, char *argv[])
 		unsigned long datalen;
 		unsigned long taglen;
 		bool is_sip_method = false;
+		int sip_status = 0;
 		char sip_method[10] = "";
 
 		if (res == 0)
@@ -544,7 +571,8 @@ int main(int argc, char *argv[])
 			}
 
 			is_sip_method = get_method(data, sip_method, sizeof(sip_method));
-			if(!is_sip_method){
+			sip_status = get_status(data, MIN(datalen, 32));
+			if(!is_sip_method && !sip_status){
 				ce = ct->find_ip_port(hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask);
 
 				if (save_this_rtp_packet && ce != nullptr)
@@ -575,7 +603,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 			}
-			if (is_sip_method || memcmp(data, "SIP/2.0 ", sizeof("SIP/2.0 ")))
+			if (is_sip_method || sip_status)
 			{
 				char caller[256] = "";
 				char called[256] = "";
@@ -643,7 +671,7 @@ int main(int argc, char *argv[])
 
 				if (ce != nullptr) {
 					char *sdp = NULL;
-					if (strcmp(sip_method, "BYE") == 0) {
+					if (strcmp(sip_method, "BYE") == 0 || sip_status >= 300) {
 						ce->had_bye = 1;
 					}
 					s = gettag(data, datalen, "Content-Type:", &taglen) ? :
