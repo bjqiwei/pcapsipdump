@@ -75,11 +75,22 @@ calltable_element_ptr calltable::add(
 }
 
 calltable_element_ptr calltable::find_by_call_id(
-	const std::string & call_id)
+	const std::string & call_id, const std::string& as_call_id)
 {
-	
-	if (callid_table.find(call_id)!= callid_table.end()){
-		return callid_table[call_id];
+	auto ce = callid_table.find(call_id);
+	if (ce != callid_table.end()){
+		return ce->second;
+	}
+
+	if (as_call_id.empty()) {
+		return nullptr;
+	}
+
+	ce = callid_table.find(as_call_id);
+	if (ce != callid_table.end())
+	{
+		callid_table[call_id] = ce->second;
+		return ce->second;
 	}
 
 	return nullptr;

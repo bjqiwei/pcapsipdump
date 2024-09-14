@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
 	pcap_t *handle;/* Session handle */
 	// directory/filename template, where .pcap files are written
 	char *opt_fntemplate;
+	std::string as_call_id_tag;
 	char *ifname;/* interface to sniff on */
 	char *fname;/* pcap file to read on */
 	char errbuf[PCAP_ERRBUF_SIZE];/* Error string */
@@ -202,11 +203,14 @@ int main(int argc, char *argv[])
 	while (1) {
 		signed char c;
 
-		c = getopt(argc, argv, "i:r:d:v:m:n:R:l:B:T:t:P:fpU");
+		c = getopt(argc, argv, "a:i:r:d:v:m:n:R:l:B:T:t:P:fpU");
 		if (c == -1)
 			break;
 
 		switch (c) {
+		case 'a':
+			as_call_id_tag = optarg; as_call_id_tag.append(":");
+			break;
 		case 'i':
 			ifname = optarg;
 			break;
@@ -300,9 +304,10 @@ int main(int argc, char *argv[])
 
 	if ((fname == NULL) && (ifname == NULL)) {
 		printf("pcapsipdump version %s\n"
-			"Usage: pcapsipdump [-fpU] [-i interface | -r file] [-d output_directory] [-P pid_file]\n"
+			"Usage: pcapsipdump [-a X-cid][-fpU] [-i interface | -r file] [-d output_directory] [-P pid_file]\n"
 			"                   [-v level] [-R filter] [-m filter] [-n filter] [-l filter]\n"
 			"                   [-B size] [-T limit] [-t trigger:action:param] [expression]\n"
+			" -a   Specify head as Call-ID.\n"
 			" -f   Do not fork or detach from controlling terminal.\n"
 			" -P   When forking, save PID to this file (default /var/run/pcapsipdump.pid).\n"
 			" -p   Do not put the interface into promiscuous mode.\n"
@@ -582,6 +587,14 @@ int main(int argc, char *argv[])
 				if (get_sip_peername(data, datalen, "To:", called, sizeof(called))) {
 					get_sip_peername(data, datalen, "t:", called, sizeof(called));
 				}
+				std::string as_call_id;
+				if(!as_call_id_tag.empty()){
+					const char* as_call_id_tmp = gettag(data, datalen, as_call_id_tag.c_str(), &taglen);
+					if(as_call_id_tmp){
+						as_call_id = std::string(as_call_id_tmp, taglen);
+					}
+				}
+				
 				const char * tmp = gettag(data, datalen, "Call-ID:", &taglen) ? : gettag(data, datalen, "i:", &taglen);
 				memcpy(callid, tmp, MIN(taglen, sizeof(callid)));
 				callid[MIN(taglen, sizeof(callid))] = '\0';
@@ -591,7 +604,7 @@ int main(int argc, char *argv[])
 					(regexec(&number_filter, called, 1, pmatch, 0) == 0)) {
 					number_filter_matched = true;
 				}
-				if (callid[0] != '\0' && (ce = ct->find_by_call_id(callid)) == nullptr && number_filter_matched)
+				if (callid[0] != '\0' && (ce = ct->find_by_call_id(callid, as_call_id)) == nullptr && number_filter_matched)
 				{
 					ce = ct->add(callid, caller, called, pkt_header->ts.tv_sec);
 					if (ce == nullptr) {

@@ -73,7 +73,7 @@ public:
 		const std::string & callee,
 		time_t time);
 	calltable_element_ptr find_by_call_id(
-		const std::string & call_id);
+		const std::string & call_id, const std::string& as_call_id = "");
 	bool add_ip_port(
 		calltable_element_ptr ce,
 		in_addr_t addr,
