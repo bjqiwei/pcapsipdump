@@ -128,6 +128,7 @@ int calltable::do_cleanup(time_t currtime) {
 		{
 			if (ce.second->f_pcap != NULL) {
 				pcap_dump_close(ce.second->f_pcap);
+				ce.second->f_pcap = NULL;
 				if (erase_non_t38 && !ce.second->had_t38) {
 					unlink(ce.second->fn_pcap.c_str());
 				}

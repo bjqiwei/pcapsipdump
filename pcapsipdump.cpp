@@ -603,7 +603,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 			}
-			if (is_sip_method || sip_status)
+			if (is_sip_method || !!sip_status)
 			{
 				char caller[256] = "";
 				char called[256] = "";
@@ -658,7 +658,11 @@ int main(int argc, char *argv[])
 								}
 								ce->f_pcap = pcap_dump_open(handle, fn);
 								ce->fn_pcap = fn;
+								if (verbosity >= 3) {
+									printf("Capture Call-ID:%s, %s:%s\n", callid, as_call_id_tag.c_str(), as_call_id.c_str());
+								}
 							}
+
 						}
 						else {
 							if (verbosity >= 2) {
@@ -699,6 +703,9 @@ int main(int argc, char *argv[])
 								header_ip->id
 						}, ce->f_pcap);
 					}
+				}
+				else if (verbosity >= 3) {
+					printf("Skipping udp packet SIP method:'%s' or SIP response %d \n", sip_method, sip_status);
 				}
 			}
 			else {
