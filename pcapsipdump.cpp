@@ -129,7 +129,7 @@ fail:
 	return false;
 }
 
-int  get_status(const char* ptr, unsigned long len) {
+bool  get_status(const char* ptr, unsigned long len, int * sip_status) {
 	//"SIP/2.0 487 Request Terminated"
 	unsigned long l, tl;
 	const char* r, * lp;
@@ -137,7 +137,7 @@ int  get_status(const char* ptr, unsigned long len) {
 	tl = strlen(tag);
 	r = (const char*)memmem(ptr, len, tag, tl);
 	if (r == NULL) {
-		return 0;
+		return false;
 	}
 	else {
 		r += tl;
@@ -146,13 +146,14 @@ int  get_status(const char* ptr, unsigned long len) {
 		}
 		lp = (const char*)memmem(r, len - (r - ptr), " ", 1);
 		if (lp == NULL) {
-			return 0;
+			return false;
 		}
 		else {
 			l = lp - r;
 		}
 	}
-	return atoi(r);
+	*sip_status = atoi(r);
+	return true;
 }
 
 int parse_sdp(in_addr_t saddr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
@@ -482,8 +483,9 @@ int main(int argc, char *argv[])
 		unsigned long datalen;
 		unsigned long taglen;
 		bool is_sip_method = false;
-		int sip_status = 0;
 		char sip_method[10] = "";
+		bool is_sip_response = false;
+		int sip_status = 0;
 
 		if (res == 0)
 			/* Timeout elapsed */
@@ -571,8 +573,8 @@ int main(int argc, char *argv[])
 			}
 
 			is_sip_method = get_method(data, sip_method, sizeof(sip_method));
-			sip_status = get_status(data, MIN(datalen, 32));
-			if(!is_sip_method && !sip_status){
+			is_sip_response = get_status(data, MIN(datalen, 32), &sip_status);
+			if(!is_sip_method && !is_sip_response){
 				ce = ct->find_ip_port(hdaddr(header_ip), htons(header_udp->dest) & rtp_port_mask);
 
 				if (save_this_rtp_packet && ce != nullptr)
@@ -603,7 +605,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 			}
-			if (is_sip_method || !!sip_status)
+			if (is_sip_method || is_sip_response)
 			{
 				char caller[256] = "";
 				char called[256] = "";
@@ -648,9 +650,13 @@ int main(int argc, char *argv[])
 							}
 							else {
 								char fn[1024], dn[1024];
+								std::string callid_tmp = callid;
+								if (!as_call_id.empty()) {
+									callid_tmp.append("-").append(as_call_id);
+								}
 								call_skip_cnt = opt_call_skip_n;
 								expand_dir_template(fn, sizeof(fn), opt_fntemplate,
-									caller, called, callid,
+									caller, called, callid_tmp.c_str(),
 									pkt_header->ts.tv_sec);
 								if (strchr(fn, '/')) {
 									strcpy(dn, fn);
