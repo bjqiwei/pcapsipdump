@@ -127,6 +127,11 @@ int calltable::do_cleanup(time_t currtime) {
 			(ce.second->had_bye && currtime - ce.second->last_packet_time > opt_absolute_timeout))
 		{
 			if (ce.second->f_pcap != NULL) {
+				for (const auto & it_ipfrags : this->ipfrags) {
+					if (it_ipfrags.second == ce.second->f_pcap) {
+						this->ipfrags.erase(it_ipfrags.first);
+					}
+				}
 				pcap_dump_close(ce.second->f_pcap);
 				ce.second->f_pcap = NULL;
 				if (erase_non_t38 && !ce.second->had_t38) {
@@ -164,5 +169,11 @@ void calltable::delete_ipfrag(struct addr_addr_id aai) {
 }
 
 pcap_dumper_t *calltable::get_ipfrag(struct addr_addr_id aai) {
-    return ipfrags[aai];
+	const auto & it = ipfrags.find(aai);
+	if(it != ipfrags.end()){
+        return it->second;
+	}
+	else {
+        return nullptr;
+	}
 }
