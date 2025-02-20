@@ -49,6 +49,15 @@
 #define PCAP_NETMASK_UNKNOWN    0xffffffff
 #endif
 
+struct linux_cooked_capture {
+    uint16_t type;
+    uint16_t address_type;
+    uint16_t address_length;
+    uint8_t  source[6];
+    uint16_t unused;
+    uint16_t protocol;
+};
+
 /*** IPv4 */
 struct iphdr {
 #if defined(__LITTLE_ENDIAN)

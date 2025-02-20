@@ -158,9 +158,10 @@ bool  get_status(const char* ptr, unsigned long len, int * sip_status) {
 
 int parse_sdp(in_addr_t saddr, const char *sdp, size_t sdplen, calltable_element_ptr ce)
 {
-    in_addr_t no_use_addr;
+    in_addr_t sdp_addr;
     unsigned short port;
-    if (! get_ip_port_from_sdp(sdp, sdplen, &no_use_addr, &port)){
+    if (! get_ip_port_from_sdp(sdp, sdplen, &sdp_addr, &port)){
+		ct->add_ip_port(ce, sdp_addr, port);
         ct->add_ip_port(ce, saddr, port);
     }else{
         if (verbosity >= 2) {
@@ -476,6 +477,7 @@ int main(int argc, char *argv[])
 	/* Retrieve the packets */
 	while ((res = pcap_next_ex(handle, &pkt_header, &pkt_data)) >= 0)
 	{
+		struct linux_cooked_capture * linux_c_c;
 		struct iphdr *header_ip;
 		struct ipv6hdr *header_ipv6;
 		char *data;
@@ -495,6 +497,13 @@ int main(int argc, char *argv[])
 			ct->do_cleanup(pkt_header->ts.tv_sec);
 			last_cleanup = pkt_header->ts.tv_sec;
 		}
+		if (offset_to_ip == 16) {
+			linux_c_c = (linux_cooked_capture *)pkt_data;
+		}
+		else {
+			linux_c_c = NULL;
+		}
+
 		header_ip = (iphdr *)((char*)pkt_data + offset_to_ip);
 		// 802.1Q VLAN
 		if ((offset_to_ip == 14) &&
@@ -688,12 +697,26 @@ int main(int argc, char *argv[])
 						gettag(data, datalen, "c:", &taglen);
 					if (taglen > 0 && s && strncasecmp(s, "application/sdp", taglen) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
-						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+						if(linux_c_c){
+							if(linux_c_c->type == 4) {//sent by us
+								parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+							}
+						}
+						else {
+							parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+						}
 					}
 					else if (taglen > 0 && s && strncasecmp(s, "multipart/mixed;boundary=", MIN(taglen, 25)) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
 						// FIXME: do proper mime miltipart parsing
-						parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+						if (linux_c_c) {
+							if (linux_c_c->type == 4) {//sent by us
+								parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+							}
+						}
+						else {
+							parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
+						}
 					}
 					if (ce->f_pcap != NULL) {
 						pcap_dump((u_char *)ce->f_pcap, pkt_header, pkt_data);
