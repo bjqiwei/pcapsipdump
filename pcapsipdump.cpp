@@ -698,7 +698,7 @@ int main(int argc, char *argv[])
 					if (taglen > 0 && s && strncasecmp(s, "application/sdp", taglen) == 0 &&
 						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
 						if(linux_c_c){
-							if(linux_c_c->type == 4) {//sent by us
+							if(ntohs(linux_c_c->type) == 4) {//sent by us
 								parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 							}
 						}
@@ -710,7 +710,7 @@ int main(int argc, char *argv[])
 						(sdp = strstr(data, "\r\n\r\n")) != NULL && datalen > (sdp - data)) {
 						// FIXME: do proper mime miltipart parsing
 						if (linux_c_c) {
-							if (linux_c_c->type == 4) {//sent by us
+							if (ntohs(linux_c_c->type) == 4) {//sent by us
 								parse_sdp(hsaddr(header_ip), sdp, datalen - (sdp - data), ce);
 							}
 						}
