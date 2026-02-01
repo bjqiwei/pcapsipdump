@@ -1,4 +1,4 @@
-LIBS ?= -lpcap -lstdc++
+LIBS ?= -lpcap -static-libstdc++ -static-libgcc
 RELEASEFLAGS ?= -g -O0 -Wall
 #CXXFLAGS ?= --std=c++0x
 
