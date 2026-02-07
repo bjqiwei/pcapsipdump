@@ -513,12 +513,13 @@ int main(int argc, char *argv[])
 		}
 		header_ipv6 = (ipv6hdr *)header_ip;
 		if (header_ip->version == 4 && (header_ip->frag_off & htons(0x1fff)) > 0) { // fragment offset > 0
-			struct addr_addr_id aai = (struct addr_addr_id) {
+			struct addr_addr_id aai{
 				header_ip->saddr,
-					header_ip->daddr,
-					header_ip->id
+				header_ip->daddr,
+				header_ip->id
 			};
-			pcap_dumper_t *f = ct->get_ipfrag(aai);
+			auto ce = ct->find_by_ipfrag(aai);
+			pcap_dumper_t* f = ce ? ce->f_pcap : nullptr;
 			if (f) {
 				pcap_dump((u_char *)f, pkt_header, pkt_data);
 				if (opt_packetbuffered) {
@@ -730,7 +731,7 @@ int main(int argc, char *argv[])
 							header_ip->saddr,
 								header_ip->daddr,
 								header_ip->id
-						}, ce->f_pcap);
+						}, ce);
 					}
 				}
 				else if (verbosity >= 3) {

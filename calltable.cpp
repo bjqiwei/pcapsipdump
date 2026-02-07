@@ -121,59 +121,74 @@ calltable_element_ptr calltable::find_ip_port(in_addr_t addr, unsigned short por
 
 int calltable::do_cleanup(time_t currtime) {
 
-	for (const auto & ce : callid_table)
+	for (auto ce = callid_table.begin(); ce != callid_table.end();)
 	{
-		if ((currtime - ce.second->last_packet_time > 300) ||
-			(ce.second->had_bye && currtime - ce.second->last_packet_time > opt_absolute_timeout))
+		if ((currtime - ce->second->last_packet_time > 300) ||
+			(ce->second->had_bye && currtime - ce->second->last_packet_time > opt_absolute_timeout))
 		{
-			if (ce.second->f_pcap != NULL) {
-				for (const auto & it_ipfrags : this->ipfrags) {
-					if (it_ipfrags.second == ce.second->f_pcap) {
-						this->ipfrags.erase(it_ipfrags.first);
-					}
+			for (auto aai : ce->second->ipfrags) {
+
+				auto it_frags = ipfrags_table.find(aai);
+				if (it_frags != ipfrags_table.end() && it_frags->second == ce->second->call_id) {
+					this->ipfrags_table.erase(aai);
 				}
-				pcap_dump_close(ce.second->f_pcap);
-				ce.second->f_pcap = NULL;
-				if (erase_non_t38 && !ce.second->had_t38) {
-					unlink(ce.second->fn_pcap.c_str());
+			}
+
+			if (ce->second->f_pcap != NULL) {
+				pcap_dump_close(ce->second->f_pcap);
+				ce->second->f_pcap = NULL;
+				if (erase_non_t38 && !ce->second->had_t38) {
+					unlink(ce->second->fn_pcap.c_str());
 				}
 				else {
 					trigger.trigger(&trigger.close,
-						ce.second->fn_pcap,
-						ce.second->caller,
-						ce.second->callee,
-						ce.second->call_id,
-						ce.second->first_packet_time);
+						ce->second->fn_pcap,
+						ce->second->caller,
+						ce->second->callee,
+						ce->second->call_id,
+						ce->second->first_packet_time);
 				}
 			}
-			for(const auto & addr_port : ce.second->ip_port)
+			for (const auto & addr_port : ce->second->ip_port)
 			{
 				const auto & it_callid = addr_port_table.find(addr_port);
-				if (it_callid != addr_port_table.end() && it_callid->second == ce.second->call_id){
+				if (it_callid != addr_port_table.end() && it_callid->second == ce->second->call_id){
 					addr_port_table.erase(it_callid);
 				}
 			}
 
-			callid_table.erase(ce.first);
+			ce = callid_table.erase(ce);
+		}
+		else {
+			ce++;
 		}
 	}
 	return 0;
 }
 
-void calltable::add_ipfrag(struct addr_addr_id aai, pcap_dumper_t *f) {
-    ipfrags[aai] = f;
+void calltable::add_ipfrag(struct addr_addr_id aai, calltable_element_ptr ce) {
+	ipfrags_table[aai] = ce->call_id;
+	ce->ipfrags.insert(aai);
 }
 
 void calltable::delete_ipfrag(struct addr_addr_id aai) {
-    ipfrags.erase(aai);
+	const auto it_frags = ipfrags_table.find(aai);
+	if (it_frags != ipfrags_table.end()) {
+		auto it_ce = callid_table.find(it_frags->second);
+		if (it_ce != callid_table.end()) {
+			it_ce->second->ipfrags.erase(aai);
+		}
+		ipfrags_table.erase(it_frags);
+	}
 }
 
-pcap_dumper_t *calltable::get_ipfrag(struct addr_addr_id aai) {
-	const auto & it = ipfrags.find(aai);
-	if(it != ipfrags.end()){
-        return it->second;
+calltable_element_ptr calltable::find_by_ipfrag(struct addr_addr_id aai) {
+	const auto & it = ipfrags_table.find(aai);
+	if(it != ipfrags_table.end()){
+		auto it_ce = callid_table.find(it->second);
+		if (it_ce != callid_table.end()) {
+			return it_ce->second;
+		}
 	}
-	else {
-        return nullptr;
-	}
+	return nullptr;
 }

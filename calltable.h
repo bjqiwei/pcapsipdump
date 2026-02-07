@@ -40,6 +40,12 @@ struct addr_port {
 	uint16_t  port;
 };
 
+struct addr_addr_id {
+	in_addr_t saddr;
+	in_addr_t daddr;
+	uint16_t  id;
+};
+
 struct calltable_element {
 	unsigned char had_bye;
 	unsigned char had_t38;
@@ -53,15 +59,10 @@ struct calltable_element {
 	time_t last_packet_time;
 	pcap_dumper_t *f_pcap;
 	std::string fn_pcap;
+	std::set<addr_addr_id> ipfrags;
 };
 
 typedef std::shared_ptr<calltable_element> calltable_element_ptr;
-
-struct addr_addr_id {
-    in_addr_t saddr;
-    in_addr_t daddr;
-    uint16_t  id;
-};
 
 class calltable
 {
@@ -83,16 +84,16 @@ public:
 		unsigned short port);
 	void add_ipfrag(
 		struct addr_addr_id aai,
-		pcap_dumper_t *f);
+		calltable_element_ptr ce);
 	void delete_ipfrag(
 		struct addr_addr_id aai);
-	pcap_dumper_t *get_ipfrag(
+	calltable_element_ptr find_by_ipfrag(
 		struct addr_addr_id aai);
 	int do_cleanup(time_t currtime);
 	bool erase_non_t38;
 	int opt_absolute_timeout;
 private:
-	std::map <addr_addr_id, pcap_dumper_t *> ipfrags;
+	std::map <addr_addr_id, std::string> ipfrags_table;
 	std::map <std::string, calltable_element_ptr> callid_table;
 	std::map <struct addr_port,std::string> addr_port_table;
 };
