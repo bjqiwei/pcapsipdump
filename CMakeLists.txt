@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 project(pcapsipdump) # 设置工程名称
 message(STATUS "Project version: ${PROJECT_VERSION}")
 
-option(USE_TCP "use tcp" OFF)
+option(USE_TCP "use tcp" ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -28,10 +28,14 @@ add_compile_options("-g")
 add_compile_options("-O0")
 #endif()
 
-if (NOT ENABLE_RTTI)
-list(APPEND CMAKE_CXX_FLAGS "-fno-rtti")
+if (USE_TCP)
+add_compile_options("-DUSE_TCP")
 endif()
-	
+
+if (NOT ENABLE_RTTI)
+add_compile_options("-fno-rtti")
+endif()
+
 add_executable(pcapsipdump pcapsipdump.cpp
 	calltable.cpp
 	pcapsipdump_lib.cpp
